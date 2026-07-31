@@ -8,12 +8,41 @@ from __future__ import annotations
 
 import numpy as np
 
+from config import POINT_CROSS_ARM_LENGTH
 from config.colors import get_color
 from core.coordinate_system import CoordinateSystem
 from core.measurement import PointMeasurement
 from graphics.gl_utils import _make_color_array
 from graphics.label_manager import _sync_labels
 from utils import format_number, format_signed_distance, format_vector
+
+
+def _cross_lines_for_points(
+    positions: np.ndarray, color: tuple[float, float, float, float], arm: float = POINT_CROSS_ARM_LENGTH
+) -> tuple[np.ndarray, np.ndarray]:
+    """Build a small 3-D crosshair ("+") through each point in ``positions``.
+
+    Returns a ``(6*N, 3)`` vertex array (3 line segments per point -- one
+    along each world axis -- as consecutive start/end pairs for a
+    ``GLLinePlotItem`` in ``mode="lines"``) and a matching ``(6*N, 4)``
+    per-vertex color array.
+    """
+    n = len(positions)
+    if n == 0:
+        return np.empty((0, 3)), np.empty((0, 4), dtype=np.float32)
+
+    offsets = np.array(
+        [
+            [-arm, 0.0, 0.0], [arm, 0.0, 0.0],
+            [0.0, -arm, 0.0], [0.0, arm, 0.0],
+            [0.0, 0.0, -arm], [0.0, 0.0, arm],
+        ]
+    )
+    # For every point, 6 vertices (3 segments): shape (N, 6, 3) -> (6*N, 3).
+    vertices = positions[:, None, :] + offsets[None, :, :]
+    vertices = vertices.reshape(-1, 3)
+    colors = _make_color_array(color, len(vertices))
+    return vertices, colors
 
 
 def _update_plane_points(
@@ -37,8 +66,11 @@ def _update_plane_points(
         colors[ref_index] = np.array(color_ref_ring, dtype=np.float32)
     widget._plane_points_item.setData(pos=positions, color=colors)
 
+    cross_pos, cross_colors = _cross_lines_for_points(positions, color_plane_point)
+    widget._plane_points_cross_item.setData(pos=cross_pos, color=cross_colors)
+
     desired = {
-        label: (pos, color_plane_point, f"{label} {format_vector(pos)}")
+        label: (pos, color_plane_point,label)
         for label, pos in plane_points.items()
     }
     _sync_labels(widget, widget._plane_labels, desired)
@@ -81,6 +113,9 @@ def _update_inspection_points(
     colors = _make_color_array(color_insp_point, len(positions))
     widget._inspection_points_item.setData(pos=positions, color=colors)
 
+    cross_pos, cross_colors = _cross_lines_for_points(positions, color_insp_point)
+    widget._inspection_points_cross_item.setData(pos=cross_pos, color=cross_colors)
+
     desired = {}
     for m in measurements:
         if reference_selected:
@@ -90,6 +125,6 @@ def _update_inspection_points(
         desired[m.label] = (
             m.world_coordinates,
             color_insp_point,
-            f"{m.label} {format_vector(m.world_coordinates)} {dist_text}",
+            f"{m.label} {dist_text}",
         )
     _sync_labels(widget, widget._inspection_labels, desired)

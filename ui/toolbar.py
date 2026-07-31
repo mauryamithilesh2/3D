@@ -8,10 +8,20 @@ and main window theme handler.
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QAction, QToolBar
+from PyQt5.QtWidgets import (
+    QAction,
+    QActionGroup,
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QToolBar,
+    QToolButton,
+    QWidget,
+)
 
 from config.colors import get_active_theme
-from ui.styles import get_toolbar_style, TOOLBAR_STYLE
+from ui.styles import get_toolbar_style, get_ui_color
+from utils import format_number
 
 #: (visibility key, action label, tooltip)
 _TOGGLES: tuple[tuple[str, str, str], ...] = (
@@ -24,6 +34,68 @@ _TOGGLES: tuple[tuple[str, str, str], ...] = (
     ("labels", "Labels", "Show/Hide point and axis text labels"),
     ("grid", "Grid", "Show/Hide the reference floor grid"),
 )
+
+
+class AxisAngleWidget(QWidget):
+    """Toolbar control: pick an axis (X or Y) and see the fitted plane's
+    inclination angle relative to that axis, kept in sync with the existing
+    ``BestFitPlaneResult.angle_x_deg()`` / ``.angle_y_deg()`` calculations."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(4, 0, 4, 0)
+        layout.setSpacing(4)
+
+        self._button = QToolButton(self)
+        self._button.setText("Angles")
+        self._button.setToolTip("Angle between the fitted plane and a chosen world axis")
+        self._button.setPopupMode(QToolButton.InstantPopup)
+
+        menu = QMenu(self._button)
+        group = QActionGroup(menu)
+        group.setExclusive(True)
+
+        self._action_x = QAction("X Axis", menu, checkable=True)
+        self._action_y = QAction("Y Axis", menu, checkable=True)
+        self._action_x.setChecked(True)
+        for action in (self._action_x, self._action_y):
+            group.addAction(action)
+            menu.addAction(action)
+            action.triggered.connect(self._refresh_label)
+        self._button.setMenu(menu)
+
+        self._value_label = QLabel("X: --\u00b0")
+        self._value_label.setStyleSheet(
+            f"color: {get_ui_color('TEXT_PRIMARY')}; font-weight: 600; padding: 0 4px;"
+        )
+
+        layout.addWidget(self._button)
+        layout.addWidget(self._value_label)
+
+        self._angle_x: float | None = None
+        self._angle_y: float | None = None
+
+    def display(self, angle_x_deg: float | None, angle_y_deg: float | None) -> None:
+        """Update the cached plane inclination angles and refresh the label."""
+        self._angle_x = angle_x_deg
+        self._angle_y = angle_y_deg
+        self._refresh_label()
+
+    def restyle(self) -> None:
+        """Re-apply active theme styles."""
+        self._value_label.setStyleSheet(
+            f"color: {get_ui_color('TEXT_PRIMARY')}; font-weight: 600; padding: 0 4px;"
+        )
+
+    def _refresh_label(self) -> None:
+        axis_name = "X" if self._action_x.isChecked() else "Y"
+        angle = self._angle_x if self._action_x.isChecked() else self._angle_y
+        if angle is None:
+            self._value_label.setText(f"{axis_name}: --\u00b0")
+        else:
+            self._value_label.setText(f"{axis_name}: {format_number(angle)}\u00b0")
 
 
 def build_main_toolbar(main_window) -> QToolBar:
@@ -42,6 +114,12 @@ def build_main_toolbar(main_window) -> QToolBar:
         action.setToolTip(tooltip)
         action.toggled.connect(lambda checked, k=key: gl_widget.set_visibility(k, checked))
         toolbar.addAction(action)
+
+    toolbar.addSeparator()
+
+    axis_angle_widget = AxisAngleWidget(main_window)
+    toolbar.addWidget(axis_angle_widget)
+    main_window._axis_angle_widget = axis_angle_widget
 
     toolbar.addSeparator()
 

@@ -15,6 +15,11 @@ INSPECTION_POINT_SIZE: Final[float] = 14.0
 PROJECTION_POINT_SIZE: Final[float] = 10.0
 IMAGINARY_POINT_SIZE: Final[float] = 14.0
 
+#: Half-length (world units) of each arm of the small 3-D crosshair drawn
+#: through every plane/inspection point marker, in addition to the round
+#: scatter dot, to pinpoint the point's exact center from any camera angle.
+POINT_CROSS_ARM_LENGTH: Final[float] = 0.9
+
 #: Length (world units) the normal indicator is drawn with, independent of
 #: the actual (unit-length) mathematical normal vector -- purely visual.
 NORMAL_VECTOR_DISPLAY_LENGTH: Final[float] = 6.0

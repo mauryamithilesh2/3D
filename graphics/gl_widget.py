@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import numpy as np
 import pyqtgraph.opengl as gl
-from PyQt5.QtGui import QColor
 
 from config import ANIMATION_DURATION_MS
 from config.colors import get_color
@@ -45,6 +44,8 @@ _ANIMATABLE_LINE_ITEMS = (
     "_normal_line_item",
     "_local_axis_item",
     "_distance_lines_item",
+    "_plane_points_cross_item",
+    "_inspection_points_cross_item",
 )
 
 

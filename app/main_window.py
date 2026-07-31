@@ -20,7 +20,7 @@ from config import (
     WINDOW_MIN_WIDTH,
     WINDOW_TITLE,
 )
-from config.colors import get_active_theme, set_active_theme
+from config.colors import set_active_theme
 from core import (
     BestFitPlane,
     CoordinateSystemBuilder,
@@ -29,10 +29,21 @@ from core import (
     MeasurementEngine,
     OriginReference,
     PlaneFitError,
+    edge_axis,
+    apply_edge_axis,
+    apply_first_second_axis,
 )
 from graphics import GL3DWidget
-from models import PointManager
-from ui import LeftPanel, PlaneAnglePanel, PointListPanel, ReferenceDistancePanel, ReferenceSelector, RightPanel
+from models import PointManager, PointManagerError
+from ui import (
+    EdgeAxisSelector,
+    LeftPanel,
+    PlaneAnglePanel,
+    PointListPanel,
+    ReferenceDistancePanel,
+    ReferenceSelector,
+    RightPanel,
+)
 from ui.styles import (
     get_app_stylesheet,
     get_statusbar_style,
@@ -87,6 +98,7 @@ class MainWindow(QMainWindow):
                 text if text in self._point_manager.plane_point_labels() else None
             )
         )
+        self._edge_axis_selector.changed.connect(self._recompute)
 
         self._recompute()
 
@@ -103,6 +115,8 @@ class MainWindow(QMainWindow):
             self._left_panel.restyle()
         if hasattr(self, "_right_panel") and hasattr(self._right_panel, "restyle"):
             self._right_panel.restyle()
+        if hasattr(self, "_axis_angle_widget"):
+            self._axis_angle_widget.restyle()
         if hasattr(self, "_gl_widget") and hasattr(self._gl_widget, "apply_theme"):
             self._gl_widget.apply_theme()
 
@@ -170,6 +184,7 @@ class MainWindow(QMainWindow):
             min_count=self._point_manager.MIN_PLANE_POINTS,
             changed_signal=self._point_manager.plane_points_changed,
             reset_last_point=self._point_manager.remove_last_plane_point,
+            rename_point=self._point_manager.rename_plane_point,
         )
 
         inspection_panel = PointListPanel(
@@ -183,6 +198,7 @@ class MainWindow(QMainWindow):
             min_count=0,
             changed_signal=self._point_manager.inspection_points_changed,
             reset_last_point=self._point_manager.remove_last_inspection_point,
+            rename_point=self._point_manager.rename_inspection_point,
         )
 
         reference_selector = ReferenceSelector(
@@ -192,6 +208,7 @@ class MainWindow(QMainWindow):
 
         self._reference_distance_panel = ReferenceDistancePanel()
         self._plane_angle_panel = PlaneAnglePanel()
+        self._edge_axis_selector = EdgeAxisSelector()
 
         left_panel = LeftPanel(
             plane_panel,
@@ -199,6 +216,7 @@ class MainWindow(QMainWindow):
             reference_selector,
             reference_distance_panel=self._reference_distance_panel,
             plane_angle_panel=self._plane_angle_panel,
+            edge_axis_selector=self._edge_axis_selector,
         )
         return left_panel, reference_selector
 
@@ -302,9 +320,15 @@ class MainWindow(QMainWindow):
             self._plane_angle_panel.display(
                 plane_result.angle_x_deg(), plane_result.angle_y_deg()
             )
+            if hasattr(self, "_axis_angle_widget"):
+                self._axis_angle_widget.display(
+                    plane_result.angle_x_deg(), plane_result.angle_y_deg()
+                )
             coordinate_system = self._build_coordinate_system(plane_result, list(leveled_points.values()))
         else:
             self._plane_angle_panel.display(None, None)
+            if hasattr(self, "_axis_angle_widget"):
+                self._axis_angle_widget.display(None, None)
 
         if plane_result is not None and coordinate_system is not None:
             self._transformer = CoordinateTransformer(coordinate_system)
@@ -443,6 +467,8 @@ class MainWindow(QMainWindow):
 
     def _build_coordinate_system(self, plane_result, points_array):
         """Build local frame for reference selector text."""
+        plane_result = self._apply_edge_axis_override(plane_result)
+
         reference_text = self._reference_selector.current_reference_text()
         plane_labels = self._point_manager.plane_point_labels()
 
@@ -456,3 +482,29 @@ class MainWindow(QMainWindow):
                 return CoordinateSystemBuilder.build_at_world_origin(plane_result)
 
         return CoordinateSystemBuilder.build_at_world_origin(plane_result)
+
+    def _apply_edge_axis_override(self, plane_result):
+        if not self._edge_axis_selector.is_side_mode():
+            self._edge_axis_selector.set_assigned_axis(None, None)
+            return plane_result
+
+        edited = self._point_manager.edited_plane_labels()
+        plane_labels = [
+            label for label in self._point_manager.plane_point_labels()
+            if label in edited
+        ]
+        if len(plane_labels) < 2:
+            self._edge_axis_selector.set_assigned_axis(None, None)
+            return plane_result
+
+        axis = self._edge_axis_selector.selected_axis()
+        label_1, label_2 = plane_labels[0], plane_labels[1]
+        try:
+            point_1 = self._point_manager.get_plane_point(label_1)
+            point_2 = self._point_manager.get_plane_point(label_2)
+            overridden = apply_first_second_axis(plane_result, point_1, point_2, axis)
+            self._edge_axis_selector.set_assigned_axis(axis, f"{label_1}\u2192{label_2}")
+            return overridden
+        except (PointManagerError, PlaneFitError):
+            self._edge_axis_selector.set_assigned_axis(None, None)
+            return plane_result

@@ -162,6 +162,25 @@ def _build_dynamic_items(widget: gl.GLViewWidget) -> None:
         pxMode=True,
         glOptions="opaque",
     )
+    # Small 3-D crosshair ("+") drawn through the center of every plane and
+    # inspection point marker, on top of the round scatter dot, so the exact
+    # point location reads clearly from any camera angle.
+    widget._plane_points_cross_item = gl.GLLinePlotItem(
+        pos=np.empty((0, 3)),
+        color=np.empty((0, 4), dtype=np.float32),
+        width=2.0,
+        mode="lines",
+        antialias=True,
+        glOptions="opaque",
+    )
+    widget._inspection_points_cross_item = gl.GLLinePlotItem(
+        pos=np.empty((0, 3)),
+        color=np.empty((0, 4), dtype=np.float32),
+        width=2.0,
+        mode="lines",
+        antialias=True,
+        glOptions="opaque",
+    )
     # Translucent glow halo drawn behind the active reference point.
     widget._reference_glow_item = gl.GLScatterPlotItem(
         pos=np.empty((0, 3)),
@@ -179,6 +198,8 @@ def _build_dynamic_items(widget: gl.GLViewWidget) -> None:
         widget._origin_point_item,
         widget._imaginary_point_item,
         widget._reference_glow_item,
+        widget._plane_points_cross_item,
+        widget._inspection_points_cross_item,
     ):
         widget.addItem(item)
 

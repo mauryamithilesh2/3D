@@ -11,7 +11,7 @@ from typing import Callable
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QComboBox, QGroupBox, QLabel, QVBoxLayout
 
-from ui.styles import get_combo_style, get_group_style, get_ui_color, TEXT_SECONDARY, _COMBO_STYLE, _GROUP_STYLE
+from ui.styles import get_combo_style, get_group_style, get_ui_color
 
 
 class ReferenceSelector(QGroupBox):

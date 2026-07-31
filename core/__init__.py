@@ -11,6 +11,7 @@ from core.best_fit_plane import (
     BestFitPlaneResult,
     PlaneFitError,
 )
+from core.edge_axis import apply_edge_axis, apply_first_second_axis
 from core.coordinate_system import (
     CoordinateSystem,
     CoordinateSystemBuilder,
@@ -31,6 +32,8 @@ __all__ = [
     "BestFitPlane",
     "BestFitPlaneResult",
     "PlaneFitError",
+    "apply_edge_axis",
+    "apply_first_second_axis",
     "CoordinateSystem",
     "CoordinateSystemBuilder",
     "CoordinateSystemError",

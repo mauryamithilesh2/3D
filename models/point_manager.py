@@ -140,6 +140,41 @@ class PointManager(QObject):
         self._edited_plane_labels.add(label)
         self.plane_points_changed.emit()
 
+    def rename_plane_point(self, old_label: str, new_label: str) -> None:
+        """Rename a plane point's label, preserving its position/state.
+
+        Raises
+        ------
+        PointManagerError
+            If ``old_label`` does not exist, ``new_label`` is empty, or a
+            plane point already exists under ``new_label``.
+        """
+        if old_label not in self._plane_points:
+            raise PointManagerError(f"No plane point with label '{old_label}'.")
+        new_label = new_label.strip()
+        if not new_label:
+            raise PointManagerError("Point name cannot be empty.")
+        if new_label == old_label:
+            return
+        if new_label in self._plane_points:
+            raise PointManagerError(f"A point named '{new_label}' already exists.")
+
+        self._plane_points = {
+            (new_label if label == old_label else label): coords
+            for label, coords in self._plane_points.items()
+        }
+        if old_label in self._active_plane_points:
+            self._active_plane_points.discard(old_label)
+            self._active_plane_points.add(new_label)
+        if old_label in self._edited_plane_labels:
+            self._edited_plane_labels.discard(old_label)
+            self._edited_plane_labels.add(new_label)
+        if self._last_edited_plane_label == old_label:
+            self._last_edited_plane_label = new_label
+        if self._reference_label == old_label:
+            self._reference_label = new_label
+        self.plane_points_changed.emit()
+
     def last_edited_plane_label(self) -> str | None:
         """Label of whichever plane point was most recently edited."""
         return self._last_edited_plane_label
@@ -297,6 +332,31 @@ class PointManager(QObject):
         if label not in self._inspection_points:
             raise PointManagerError(f"No inspection point with label '{label}'.")
         self._inspection_points[label] = np.array([x, y, z], dtype=np.float64)
+        self.inspection_points_changed.emit()
+
+    def rename_inspection_point(self, old_label: str, new_label: str) -> None:
+        """Rename an inspection point's label, preserving its position.
+
+        Raises
+        ------
+        PointManagerError
+            If ``old_label`` does not exist, ``new_label`` is empty, or an
+            inspection point already exists under ``new_label``.
+        """
+        if old_label not in self._inspection_points:
+            raise PointManagerError(f"No inspection point with label '{old_label}'.")
+        new_label = new_label.strip()
+        if not new_label:
+            raise PointManagerError("Point name cannot be empty.")
+        if new_label == old_label:
+            return
+        if new_label in self._inspection_points:
+            raise PointManagerError(f"A point named '{new_label}' already exists.")
+
+        self._inspection_points = {
+            (new_label if label == old_label else label): coords
+            for label, coords in self._inspection_points.items()
+        }
         self.inspection_points_changed.emit()
 
     def inspection_point_labels(self) -> list[str]:

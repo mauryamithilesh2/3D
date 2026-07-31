@@ -18,7 +18,6 @@ and ``plane_result.normal``, which are already computed by ``core/``.
 from __future__ import annotations
 
 import numpy as np
-import pyqtgraph.opengl as gl
 
 from config import (
     LOCAL_AXIS_DISPLAY_LENGTH,

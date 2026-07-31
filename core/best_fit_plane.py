@@ -258,8 +258,7 @@ class BestFitPlane:
         # normal above.
         world_x = np.array([1.0, 0.0, 0.0])
         world_y = np.array([0.0, 1.0, 0.0])
-        # reference_axis = world_x if abs(float(np.dot(normal, world_x))) <= abs(float(np.dot(normal, world_y))) else world_y
-      
+
         EDGE_ON_THRESHOLD = 0.9999
         if abs(float(np.dot(normal, world_x))) < EDGE_ON_THRESHOLD:
             reference_axis = world_x

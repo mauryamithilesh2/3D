@@ -15,7 +15,7 @@ from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import QFrame, QLineEdit
 
 from config import COORD_INPUT_DECIMALS, COORD_MAX, COORD_MIN
-from config.colors import get_active_theme, set_active_theme
+from config.colors import get_active_theme
 
 # ---------------------------------------------------------------------------
 # Theme Palettes

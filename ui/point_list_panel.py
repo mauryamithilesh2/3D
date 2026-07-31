@@ -9,10 +9,11 @@ from __future__ import annotations
 from typing import Callable
 
 import numpy as np
-from PyQt5.QtWidgets import QGroupBox, QHBoxLayout, QPushButton, QVBoxLayout
+from PyQt5.QtWidgets import QGroupBox, QHBoxLayout, QMessageBox, QPushButton, QVBoxLayout
 
+from models import PointManagerError
 from ui.coordinate_row import CoordinateRow
-from ui.styles import get_button_style, get_group_style, _BUTTON_STYLE, _GROUP_STYLE
+from ui.styles import get_button_style, get_group_style
 
 
 class PointListPanel(QGroupBox):
@@ -28,6 +29,7 @@ class PointListPanel(QGroupBox):
         min_count: int,
         changed_signal,
         reset_last_point: Callable[[], None] | None = None,
+        rename_point: Callable[[str, str], None] | None = None,
     ) -> None:
         super().__init__(title)
         self.setStyleSheet(get_group_style())
@@ -35,6 +37,7 @@ class PointListPanel(QGroupBox):
         self._get_points = get_points
         self._update_point = update_point
         self._remove_point = remove_point
+        self._rename_point = rename_point
         self._min_count = min_count
         self._rows: dict[str, CoordinateRow] = {}
 
@@ -111,6 +114,7 @@ class PointListPanel(QGroupBox):
             row = CoordinateRow(label, x, y, z, removable=True)
             row.values_committed.connect(self._on_row_committed)
             row.remove_requested.connect(self._on_row_remove_requested)
+            row.label_edit_requested.connect(self._on_row_rename_requested)
             self._rows_layout.addWidget(row)
             self._rows[label] = row
 
@@ -132,3 +136,20 @@ class PointListPanel(QGroupBox):
             self._remove_point(label)
         except ValueError:
             pass
+
+    def _on_row_rename_requested(self, old_label: str, new_label: str) -> None:
+        """Attempt to rename a point; show a popup and revert the field if the
+        name is invalid or already taken by another point."""
+        if self._rename_point is None:
+            row = self._rows.get(old_label)
+            if row is not None:
+                row.set_label_text(old_label)
+            return
+
+        try:
+            self._rename_point(old_label, new_label)
+        except PointManagerError as exc:
+            QMessageBox.warning(self, "Point Name Already Exists", str(exc))
+            row = self._rows.get(old_label)
+            if row is not None:
+                row.set_label_text(old_label)

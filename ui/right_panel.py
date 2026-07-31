@@ -9,7 +9,6 @@ core results.
 
 from __future__ import annotations
 
-from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QHeaderView,
     QLabel,
@@ -22,7 +21,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ui.info_panel import InfoPanel
-from ui.styles import get_panel_header_style, get_table_style, get_tab_widget_style, PANEL_HEADER_STYLE, TABLE_STYLE, TAB_WIDGET_STYLE
+from ui.styles import get_panel_header_style, get_table_style, get_tab_widget_style
 from utils import format_number
 
 

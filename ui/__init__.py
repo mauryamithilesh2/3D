@@ -5,6 +5,7 @@ PyQt presentation layer exporting visual control panels, tables, coordinate rows
 """
 
 from ui.coordinate_row import CoordinateRow
+from ui.edge_axis_selector import EdgeAxisSelector
 from ui.info_panel import InfoPanel
 from ui.left_panel import LeftPanel
 from ui.panel_factory import build_left_panel
@@ -21,6 +22,7 @@ __all__ = [
     "PlaneAnglePanel",
     "ReferenceSelector",
     "ReferenceDistancePanel",
+    "EdgeAxisSelector",
     "LeftPanel",
     "RightPanel",
     "InfoPanel",
