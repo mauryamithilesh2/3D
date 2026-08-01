@@ -2,25 +2,21 @@
 app/main_window.py
 ==================
 Main Window class assembling controls, 3-D view, right results panel, and stringing together the calculations.
+Subclasses ``BaseModuleWindow`` to follow standard module window chrome and toolbar contract.
 """
 
 from __future__ import annotations
 
 import numpy as np
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import QLabel, QMainWindow, QSplitter
+from PyQt5.QtWidgets import QLabel, QSplitter
 
+from app.base_window import BaseModuleWindow
 from config import (
     DEFAULT_NEW_POINT,
     INITIAL_INSPECTION_POINTS,
     INITIAL_PLANE_POINTS,
-    WINDOW_DEFAULT_HEIGHT,
-    WINDOW_DEFAULT_WIDTH,
-    WINDOW_MIN_HEIGHT,
-    WINDOW_MIN_WIDTH,
-    WINDOW_TITLE,
 )
-from config.colors import set_active_theme
 from core import (
     BestFitPlane,
     CoordinateSystemBuilder,
@@ -44,36 +40,42 @@ from ui import (
     ReferenceSelector,
     RightPanel,
 )
-from ui.styles import (
-    get_app_stylesheet,
-    get_statusbar_style,
-    get_toolbar_style,
-)
-from ui.toolbar import build_main_toolbar
+from ui.toolbar import _TOGGLES, AxisAngleWidget
+from plc.plc_registers import PLC_POINTS, PLC_INSPECTION_POINTS
 
 
-class MainWindow(QMainWindow):
+class MainWindow(BaseModuleWindow):
     """Assembles the left control panel, the 3-D view, and the right results panel."""
 
     _measurements_changed = pyqtSignal()
 
-    def __init__(self) -> None:
+    def __init__(self, module: str | None = None) -> None:
         super().__init__()
-        self.setWindowTitle(WINDOW_TITLE)
-        self.resize(WINDOW_DEFAULT_WIDTH + 360, WINDOW_DEFAULT_HEIGHT)
-        self.setMinimumSize(WINDOW_MIN_WIDTH + 300, WINDOW_MIN_HEIGHT)
-        self.setStyleSheet(get_app_stylesheet())
+        self.module = module or "distance"
+        module_titles = {
+            "distance": "Distance & Coordinate Measurement",
+            "circularity": "Circularity & Concentricity",
+            "parallelism": "Parallelism & Perpendicularity",
+        }
+        self.module_title = module_titles.get(self.module, self.module.title())
+        self._init_chrome(self.module_title)
 
         self._point_manager = PointManager(parent=self)
         self._transformer: CoordinateTransformer | None = None
+
+        # Cursors into the hard-coded PLC register tables -- each click of
+        # "Add" consumes the next register in order instead of dumping all
+        # of them in at once.
+        self._plc_point_cursor = 0
+        self._plc_inspection_cursor = 0
 
         # -- Build widgets ---------------------------------------------
         self._left_panel, self._reference_selector = self._build_left_panel()
         self._gl_widget = GL3DWidget()
         self._right_panel = RightPanel()
 
-        self._toolbar = build_main_toolbar(self)
-        self.addToolBar(self._toolbar)
+        self._axis_angle_widget = AxisAngleWidget(self)
+        self._init_toolbar(self._gl_widget, _TOGGLES, extra_widget=self._axis_angle_widget)
         self._build_status_bar()
 
         splitter = QSplitter(Qt.Horizontal)
@@ -104,12 +106,7 @@ class MainWindow(QMainWindow):
 
     def set_theme(self, theme_name: str) -> None:
         """Switch active theme ('dark' or 'light'), restyle UI chrome and rebuild 3D viewport."""
-        set_active_theme(theme_name)
-
-        self.setStyleSheet(get_app_stylesheet())
-        if hasattr(self, "_toolbar"):
-            self._toolbar.setStyleSheet(get_toolbar_style())
-        self.statusBar().setStyleSheet(get_statusbar_style())
+        super().set_theme(theme_name)
 
         if hasattr(self, "_left_panel") and hasattr(self._left_panel, "restyle"):
             self._left_panel.restyle()
@@ -117,13 +114,6 @@ class MainWindow(QMainWindow):
             self._right_panel.restyle()
         if hasattr(self, "_axis_angle_widget"):
             self._axis_angle_widget.restyle()
-        if hasattr(self, "_gl_widget") and hasattr(self._gl_widget, "apply_theme"):
-            self._gl_widget.apply_theme()
-
-        if hasattr(self, "_theme_action"):
-            self._theme_action.blockSignals(True)
-            self._theme_action.setChecked(theme_name == "light")
-            self._theme_action.blockSignals(False)
 
     # ------------------------------------------------------------------
     # Status bar
@@ -132,7 +122,6 @@ class MainWindow(QMainWindow):
     def _build_status_bar(self) -> None:
         """Build the industrial-style status bar (plane fit state, point counts, reference)."""
         bar = self.statusBar()
-        bar.setStyleSheet(get_statusbar_style())
 
         self._status_fit_label = QLabel("Plane: not fitted")
         self._status_points_label = QLabel("Plane pts: 0   Inspection pts: 0")
@@ -178,7 +167,7 @@ class MainWindow(QMainWindow):
                     self._point_manager.plane_points_array(),
                 )
             ),
-            add_point=lambda: self._point_manager.add_plane_point(default_x, default_y, default_z),
+            add_point=self.add_plc_point,
             update_point=self._point_manager.update_plane_point,
             remove_point=self._point_manager.remove_plane_point,
             min_count=self._point_manager.MIN_PLANE_POINTS,
@@ -190,9 +179,7 @@ class MainWindow(QMainWindow):
         inspection_panel = PointListPanel(
             title="Inspection Points",
             get_points=self._point_manager.inspection_points,
-            add_point=lambda: self._point_manager.add_inspection_point(
-                default_x, default_y, default_z
-            ),
+            add_point=self.add_plc_inspection_point,
             update_point=self._point_manager.update_inspection_point,
             remove_point=self._point_manager.remove_inspection_point,
             min_count=0,
@@ -218,7 +205,39 @@ class MainWindow(QMainWindow):
             plane_angle_panel=self._plane_angle_panel,
             edge_axis_selector=self._edge_axis_selector,
         )
+
         return left_panel, reference_selector
+
+    # ------------------------------------------------------------------
+    # PLC point loading
+    # ------------------------------------------------------------------
+
+    def add_plc_point(self) -> None:
+        """Add the NEXT plane point from the hard-coded PLC registers.
+
+        One click == one register consumed, in table order. Once every
+        register in :data:`PLC_POINTS` has been added, further clicks are a
+        no-op. The point is also marked "active" (via ``update_plane_point``)
+        so it immediately participates in the plane fit and shows up in the
+        3D view -- ``add_plane_point`` alone only adds it to the list.
+        """
+        registers = list(PLC_POINTS.keys())
+        if self._plc_point_cursor >= len(registers):
+            return
+        point = PLC_POINTS[registers[self._plc_point_cursor]]
+        label = self._point_manager.add_plane_point(*point)
+        self._point_manager.update_plane_point(label, *point)
+        self._plc_point_cursor += 1
+
+    def add_plc_inspection_point(self) -> None:
+        """Add the NEXT inspection point from the hard-coded PLC registers,
+        one register per click, same cursor pattern as :meth:`add_plc_point`."""
+        registers = list(PLC_INSPECTION_POINTS.keys())
+        if self._plc_inspection_cursor >= len(registers):
+            return
+        point = PLC_INSPECTION_POINTS[registers[self._plc_inspection_cursor]]
+        self._point_manager.add_inspection_point(*point)
+        self._plc_inspection_cursor += 1
 
     def _plane_local_points(self) -> list[tuple[str, np.ndarray]]:
         """Return plane points as ``(label, LOCAL coordinates)``."""

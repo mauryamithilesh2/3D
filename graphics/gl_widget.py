@@ -12,23 +12,19 @@ from __future__ import annotations
 import numpy as np
 import pyqtgraph.opengl as gl
 
-from config import ANIMATION_DURATION_MS
-from config.colors import get_color
 from core.best_fit_plane import BestFitPlaneResult
 from core.coordinate_system import CoordinateSystem
 from core.measurement import PointMeasurement
-from graphics.animation import SceneAnimator
+from graphics.base_gl_widget import BaseGLWidget
 from graphics.distance_renderer import _update_distance_lines
 from graphics.dotted_line_renderer import _update_dotted_lines
 from graphics.frame_renderer import _update_local_axes, _update_normal_arrow
 from graphics.ghost_renderer import _render_ghost_history
-from graphics.gl_utils import _lerp, _to_qcolor
+from graphics.gl_utils import _lerp
 from graphics.label_manager import _sync_labels
-from graphics.orientation_widget import OrientationTriadWidget
 from graphics.plane_renderer import _update_plane_and_normal
 from graphics.point_renderer import _update_inspection_points, _update_plane_points
 from graphics.scene_dynamic import _build_dynamic_items
-from graphics.scene_static import _build_static_items
 
 #: Scatter items (attribute name -> None) whose ``.pos`` array is smoothly
 #: interpolated between refreshes, when shape and visibility are stable.
@@ -49,7 +45,7 @@ _ANIMATABLE_LINE_ITEMS = (
 )
 
 
-class GL3DWidget(gl.GLViewWidget):
+class GL3DWidget(BaseGLWidget):
     """The persistent 3-D scene showing the plane fit and its measurements.
 
     This widget has no knowledge of PyQt line-edits or the point manager --
@@ -63,8 +59,6 @@ class GL3DWidget(gl.GLViewWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self._apply_default_camera()
-        self.setBackgroundColor(_to_qcolor(get_color("COLOR_VIEWPORT_BG")))
 
         # Dynamic per-label text items, keyed by point label.
         self._plane_labels: dict[str, gl.GLTextItem] = {}
@@ -77,34 +71,19 @@ class GL3DWidget(gl.GLViewWidget):
         # Show/Hide toolbar toggle state -- an AND-mask applied after every
         # refresh so re-enabling a toggle simply re-runs the last known
         # scene update instead of needing bespoke "show" logic per item.
-        self._visibility: dict[str, bool] = {
+        self._visibility.update({
             "plane": True,
-            "global_axes": True,
             "local_axes": True,
             "normal": True,
             "projection": True,
             "dotted": True,
-            "labels": True,
-            "grid": True,
-        }
+        })
 
-        self._last_update_args: tuple | None = None
-        self._last_update_kwargs: dict | None = None
-        self._animator = SceneAnimator(duration_ms=ANIMATION_DURATION_MS, parent=self)
-
-        self._build_static_items()
         self._build_dynamic_items()
-
-        self._orientation_widget = OrientationTriadWidget(self)
-        self._orientation_widget.reposition()
 
     # ------------------------------------------------------------------
     # One-time construction delegation
     # ------------------------------------------------------------------
-
-    def _build_static_items(self) -> None:
-        """Create grid and world axes."""
-        _build_static_items(self)
 
     def _build_dynamic_items(self) -> None:
         """Create dynamic OpenGL items."""
@@ -112,38 +91,12 @@ class GL3DWidget(gl.GLViewWidget):
 
     def apply_theme(self) -> None:
         """Rebuild static viewport items and update background color for active theme."""
-        self.setBackgroundColor(_to_qcolor(get_color("COLOR_VIEWPORT_BG")))
-
-        if hasattr(self, "_grid") and self._grid in self.items:
-            self.removeItem(self._grid)
-        for attr in ("_axis_x", "_axis_y", "_axis_z"):
-            if hasattr(self, attr):
-                item = getattr(self, attr)
-                if item in self.items:
-                    self.removeItem(item)
-        if hasattr(self, "_axis_label_items"):
-            for item in self._axis_label_items:
-                if item in self.items:
-                    self.removeItem(item)
-
-        self._build_static_items()
+        super().apply_theme()
 
         if self._last_update_args is not None and self._last_update_kwargs is not None:
             self.update_scene(*self._last_update_args, **self._last_update_kwargs, animate=False)
         else:
             self._apply_visibility_overrides()
-
-        if hasattr(self, "_orientation_widget"):
-            self._orientation_widget.update()
-
-    # ------------------------------------------------------------------
-    # Qt overrides
-    # ------------------------------------------------------------------
-
-    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
-        super().resizeEvent(event)
-        if hasattr(self, "_orientation_widget"):
-            self._orientation_widget.reposition()
 
     # ------------------------------------------------------------------
     # Public API
@@ -178,7 +131,11 @@ class GL3DWidget(gl.GLViewWidget):
         before = self._snapshot_animatable() if animate else None
 
         self._update_plane_points(plane_points, coordinate_system, reference_label)
-        self._update_inspection_points(inspection_measurements, reference_selected)
+# old code
+#         self._update_inspection_points(inspection_measurements, reference_selected)
+
+# new code
+        self._update_inspection_points(inspection_measurements, reference_selected, inspection_points=inspection_points)
         self._update_plane_and_normal(plane_points, plane_result, coordinate_system)
         self._update_local_axes(coordinate_system)
         self._update_normal_arrow(plane_result, coordinate_system)
@@ -197,31 +154,9 @@ class GL3DWidget(gl.GLViewWidget):
             after = self._snapshot_animatable()
             self._animate_transition(before, after)
 
-    def reset_camera(self) -> None:
-        """Restore default camera position."""
-        self._apply_default_camera()
-
-    def _apply_default_camera(self) -> None:
-        """Set standard camera viewing angle (elev=90, azim=-90)."""
-        self.setCameraPosition(distance=45.0, elevation=90.0, azimuth=-90.0)
-
     # ------------------------------------------------------------------
     # Show / hide toolbar toggles
     # ------------------------------------------------------------------
-
-    def set_visibility(self, key: str, visible: bool) -> None:
-        """Toggle one visual layer on/off (toolbar action handler)."""
-        if key not in self._visibility:
-            return
-        self._visibility[key] = visible
-        if self._last_update_args is not None:
-            # Re-run the last known scene state so natural (data-driven)
-            # visibility recalculates before the override mask is applied --
-            # this is what lets re-enabling a toggle correctly show items
-            # again instead of only ever being able to hide them.
-            self.update_scene(*self._last_update_args, **self._last_update_kwargs, animate=False)
-        else:
-            self._apply_visibility_overrides()
 
     def set_ghost_mode(self, enabled: bool) -> None:
         """Enable/disable the optional plane history ghosting overlay."""
@@ -230,24 +165,12 @@ class GL3DWidget(gl.GLViewWidget):
 
     def _apply_visibility_overrides(self) -> None:
         """Apply visibility state to visual scene items."""
+        super()._apply_visibility_overrides()
         v = self._visibility
 
         if not v["plane"]:
             self._plane_mesh_item.setVisible(False)
             self._plane_line_item.setVisible(False)
-
-        if v["global_axes"]:
-            self._axis_x.setVisible(True)
-            self._axis_y.setVisible(True)
-            self._axis_z.setVisible(True)
-        else:
-            self._axis_x.setVisible(False)
-            self._axis_y.setVisible(False)
-            self._axis_z.setVisible(False)
-
-        show_axis_labels = v["global_axes"] and v["labels"]
-        for item in self._axis_label_items:
-            item.setVisible(show_axis_labels)
 
         if not v["local_axes"]:
             self._local_axis_item.setVisible(False)
@@ -272,8 +195,6 @@ class GL3DWidget(gl.GLViewWidget):
                 item.setVisible(False)
             for item in self._local_axis_label_items.values():
                 item.setVisible(False)
-
-        self._grid.setVisible(v["grid"])
 
     # ------------------------------------------------------------------
     # Smooth-transition animation (plane rotation, local axes, normal
@@ -357,12 +278,22 @@ class GL3DWidget(gl.GLViewWidget):
     ) -> None:
         _update_plane_points(self, plane_points, coordinate_system, reference_label)
 
+# old code
+#     def _update_inspection_points(
+#         self,
+#         measurements: list[PointMeasurement],
+#         reference_selected: bool = False,
+#     ) -> None:
+#         _update_inspection_points(self, measurements, reference_selected)
+
+# new code
     def _update_inspection_points(
         self,
         measurements: list[PointMeasurement],
         reference_selected: bool = False,
+        inspection_points: list[tuple[str, np.ndarray]] | None = None,
     ) -> None:
-        _update_inspection_points(self, measurements, reference_selected)
+        _update_inspection_points(self, measurements, reference_selected, inspection_points=inspection_points)
 
     def _update_plane_and_normal(
         self,

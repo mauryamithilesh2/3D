@@ -98,14 +98,50 @@ def _update_reference_glow(
         widget._reference_glow_item.setVisible(False)
 
 
+# old code
+# def _update_inspection_points(
+#     widget,
+#     measurements: list[PointMeasurement],
+#     reference_selected: bool = False,
+# ) -> None:
+#     """Update the inspection point scatter and its labels."""
+#     if measurements:
+#         positions = np.stack([m.world_coordinates for m in measurements])
+#     else:
+#         positions = np.empty((0, 3))
+# 
+#     color_insp_point = get_color("COLOR_INSPECTION_POINT")
+#     colors = _make_color_array(color_insp_point, len(positions))
+#     widget._inspection_points_item.setData(pos=positions, color=colors)
+# 
+#     cross_pos, cross_colors = _cross_lines_for_points(positions, color_insp_point)
+#     widget._inspection_points_cross_item.setData(pos=cross_pos, color=cross_colors)
+# 
+#     desired = {}
+#     for m in measurements:
+#         if reference_selected:
+#             dist_text = f"d={format_number(m.distance_to_reference)}"
+#         else:
+#             dist_text = f"d={format_signed_distance(abs(m.distance_to_plane))}"
+#         desired[m.label] = (
+#             m.world_coordinates,
+#             color_insp_point,
+#             f"{m.label} {dist_text}",
+#         )
+#     _sync_labels(widget, widget._inspection_labels, desired)
+
+# new code
 def _update_inspection_points(
     widget,
     measurements: list[PointMeasurement],
     reference_selected: bool = False,
+    inspection_points: list[tuple[str, np.ndarray]] | None = None,
 ) -> None:
     """Update the inspection point scatter and its labels."""
     if measurements:
         positions = np.stack([m.world_coordinates for m in measurements])
+    elif inspection_points:
+        positions = np.stack([pos for _, pos in inspection_points])
     else:
         positions = np.empty((0, 3))
 
@@ -117,14 +153,18 @@ def _update_inspection_points(
     widget._inspection_points_cross_item.setData(pos=cross_pos, color=cross_colors)
 
     desired = {}
-    for m in measurements:
-        if reference_selected:
-            dist_text = f"d={format_number(m.distance_to_reference)}"
-        else:
-            dist_text = f"d={format_signed_distance(abs(m.distance_to_plane))}"
-        desired[m.label] = (
-            m.world_coordinates,
-            color_insp_point,
-            f"{m.label} {dist_text}",
-        )
+    if measurements:
+        for m in measurements:
+            desired[m.label] = (
+                m.world_coordinates,
+                color_insp_point,
+                m.label,
+            )
+    elif inspection_points:
+        for label, pos in inspection_points:
+            desired[label] = (
+                pos,
+                color_insp_point,
+                label,
+            )
     _sync_labels(widget, widget._inspection_labels, desired)

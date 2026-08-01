@@ -52,7 +52,8 @@ class PointListPanel(QGroupBox):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(4)
 
-        self._add_button = QPushButton("+ Add Point")
+        # self._add_button = QPushButton("+ Add Point")
+        self._add_button = QPushButton("Add PLC Data")
         self._add_button.setStyleSheet(get_button_style())
         self._add_button.clicked.connect(add_point)
         btn_layout.addWidget(self._add_button)

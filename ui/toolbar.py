@@ -2,8 +2,7 @@
 ui/toolbar.py
 =============
 Main window toolbar: Show/Hide toggles for visual scene layers, ghost mode,
-Reset View action, and Dark/Light Theme toggle -- wired to :class:`~graphics.gl_widget.GL3DWidget`
-and main window theme handler.
+Reset View action, and Dark/Light Theme toggle -- built via :func:`ui.base_toolbar.build_module_toolbar`.
 """
 
 from __future__ import annotations
@@ -19,8 +18,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from config.colors import get_active_theme
-from ui.styles import get_toolbar_style, get_ui_color
+from ui.base_toolbar import build_module_toolbar
+from ui.styles import get_ui_color
 from utils import format_number
 
 #: (visibility key, action label, tooltip)
@@ -100,57 +99,19 @@ class AxisAngleWidget(QWidget):
 
 def build_main_toolbar(main_window) -> QToolBar:
     """Build and return the fully-wired main visualization toolbar."""
-    toolbar = QToolBar("Visualization", main_window)
-    toolbar.setMovable(False)
-    toolbar.setStyleSheet(get_toolbar_style())
-    toolbar.setIconSize(toolbar.iconSize())
-
-    gl_widget = main_window._gl_widget
-
-    for key, label, tooltip in _TOGGLES:
-        action = QAction(label, main_window)
-        action.setCheckable(True)
-        action.setChecked(True)
-        action.setToolTip(tooltip)
-        action.toggled.connect(lambda checked, k=key: gl_widget.set_visibility(k, checked))
-        toolbar.addAction(action)
-
-    toolbar.addSeparator()
-
     axis_angle_widget = AxisAngleWidget(main_window)
-    toolbar.addWidget(axis_angle_widget)
     main_window._axis_angle_widget = axis_angle_widget
-
-    toolbar.addSeparator()
-
-    ghost_action = QAction("Ghost History", main_window)
-    ghost_action.setCheckable(True)
-    ghost_action.setChecked(False)
-    ghost_action.setToolTip("Show faint overlays of previous plane-fit positions")
-    ghost_action.toggled.connect(gl_widget.set_ghost_mode)
-    toolbar.addAction(ghost_action)
-
-    toolbar.addSeparator()
-
-    reset_action = QAction("Reset View", main_window)
-    reset_action.setToolTip("Reset the camera to the default top-down view")
-    reset_action.triggered.connect(gl_widget.reset_camera)
-    toolbar.addAction(reset_action)
-
-    toolbar.addSeparator()
-
-    current_theme = get_active_theme()
-    theme_action = QAction("Light Theme", main_window)
-    theme_action.setCheckable(True)
-    theme_action.setChecked(current_theme == "light")
-    theme_action.setToolTip("Toggle between Dark and Light themes")
 
     def _on_theme_toggled(checked: bool) -> None:
         target_theme = "light" if checked else "dark"
         main_window.set_theme(target_theme)
 
-    theme_action.toggled.connect(_on_theme_toggled)
-    toolbar.addAction(theme_action)
+    toolbar, theme_action = build_module_toolbar(
+        main_window,
+        main_window._gl_widget,
+        _TOGGLES,
+        extra_widget=axis_angle_widget,
+        on_theme_toggle=_on_theme_toggled,
+    )
     main_window._theme_action = theme_action
-
     return toolbar

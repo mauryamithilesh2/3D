@@ -12,6 +12,7 @@ from core.best_fit_plane import (
     PlaneFitError,
 )
 from core.edge_axis import apply_edge_axis, apply_first_second_axis
+from core.circularity import ConcentricityResult, measure_concentricity, perpendicular_basis
 from core.coordinate_system import (
     CoordinateSystem,
     CoordinateSystemBuilder,
@@ -34,6 +35,9 @@ __all__ = [
     "PlaneFitError",
     "apply_edge_axis",
     "apply_first_second_axis",
+    "ConcentricityResult",
+    "measure_concentricity",
+    "perpendicular_basis",
     "CoordinateSystem",
     "CoordinateSystemBuilder",
     "CoordinateSystemError",
