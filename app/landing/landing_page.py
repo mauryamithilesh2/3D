@@ -41,7 +41,7 @@ class LandingPage(QWidget):
 
         # 1. Top Section Header Logo Widget
         self._header = LogoWidget(
-            company_name="PRECISION METROLOGY SYSTEMS",
+            company_name="KADENCE AUTOMATION & ROBOTICS SYSTEMS",
             software_name="Industrial Geometry Measurement System",
             subtitle="Precision Metrology & Coordinate Inspection Platform",
             version="Version 1.0.0",
@@ -110,7 +110,7 @@ class LandingPage(QWidget):
         comp_text = QLabel("Precision Metrology Corp.")
         comp_text.setObjectName("StatusText")
 
-        copyright_text = QLabel("© 2026 Precision Metrology Systems. All Rights Reserved.")
+        copyright_text = QLabel("© 2026 Kadence Automation & Robotics System. All Rights Reserved.")
         copyright_text.setObjectName("StatusText")
 
         layout.addWidget(sys_status_pill)

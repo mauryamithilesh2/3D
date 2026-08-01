@@ -28,8 +28,18 @@ from ui.styles import get_button_style, get_field_style, get_group_style, get_ui
 from utils import format_number, parse_float
 
 
-def _coord_group(title: str, default: tuple[float, float, float]) -> tuple[QGroupBox, dict[str, QLineEdit]]:
-    """Build a titled X/Y/Z entry row and return it with its edit widgets."""
+def _coord_group(
+    title: str,
+    default: tuple[float, float, float],
+    *,
+    with_radius: bool = False,
+    default_radius: float = 5.0,
+) -> tuple[QGroupBox, dict[str, QLineEdit]]:
+    """Build a titled X/Y/Z entry row and return it with its edit widgets.
+
+    When ``with_radius`` is True, an additional "R" field is appended,
+    keyed as ``"R"`` in the returned edits dict.
+    """
     box = QGroupBox(title)
     box.setStyleSheet(get_group_style())
     layout = QHBoxLayout(box)
@@ -43,6 +53,13 @@ def _coord_group(title: str, default: tuple[float, float, float]) -> tuple[QGrou
         edit.setText(format_number(value))
         layout.addWidget(edit)
         edits[axis_name] = edit
+
+    if with_radius:
+        layout.addWidget(QLabel("R"))
+        radius_edit = _make_coord_edit()
+        radius_edit.setText(format_number(default_radius))
+        layout.addWidget(radius_edit)
+        edits["R"] = radius_edit
 
     return box, edits
 
@@ -82,11 +99,7 @@ class CircularityPanel(QWidget):
 
         self._result_labels: dict[str, QLabel] = {}
         rows = [
-            ("radial_displacement", "Radial Displacement (misalignment)"),
-            ("delta_axial", "Axial Separation (along rod)"),
-            ("delta_radial_1", "Offset - axis 1"),
-            ("delta_radial_2", "Offset - axis 2"),
-            ("straight_line_distance", "Straight-Line Distance"),
+            ("radial_displacement", "Offset (Center Displacement)"),
         ]
         for row_index, (key, caption) in enumerate(rows):
             caption_label = QLabel(caption)
@@ -119,10 +132,11 @@ class CircularityPanel(QWidget):
             return
 
         self._result_labels["radial_displacement"].setText(format_number(result.radial_displacement))
-        self._result_labels["delta_axial"].setText(format_number(result.delta_axial))
-        self._result_labels["delta_radial_1"].setText(format_number(result.delta_radial_1))
-        self._result_labels["delta_radial_2"].setText(format_number(result.delta_radial_2))
-        self._result_labels["straight_line_distance"].setText(format_number(result.straight_line_distance))
+        # Note: result still carries delta_axial, straight_line_distance,
+        # boundary_distance/contained/boundary_margin etc. -- computed and
+        # available (e.g. to the 3D viewport via the `measured` signal) --
+        # this panel just no longer displays them, per current request to
+        # show only the center-to-center offset here.
 
         self.measured.emit(center_1, center_2, rod_axis, result)
 

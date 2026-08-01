@@ -16,6 +16,7 @@ from config.colors import get_color
 from core.circularity import ConcentricityResult, perpendicular_basis
 from graphics.base_gl_widget import BaseGLWidget
 from graphics.gl_utils import _lerp, _to_qcolor
+from graphics.label_manager import _sync_labels
 
 #: Visual-only hole radius for drawing the circle rings. The PLC only
 #: supplies center points, not bore diameter, so this is illustrative --
@@ -54,6 +55,11 @@ class CircularityGLWidget(BaseGLWidget):
 
         self._last_positions: dict[str, np.ndarray] | None = None
 
+        # C1/C2 text labels next to each hole center, kept in sync via the
+        # same _sync_labels helper the distance module uses for its point
+        # labels -- so styling/behavior stays consistent app-wide.
+        self._center_labels: dict[str, gl.GLTextItem] = {}
+
     def _apply_default_camera(self) -> None:
         """Set camera viewing angle for circularity viewport."""
         self.setCameraPosition(distance=140, elevation=22, azimuth=35)
@@ -82,9 +88,20 @@ class CircularityGLWidget(BaseGLWidget):
         # same "nearest point" the axial/radial decomposition is built from.
         nearest_on_axis = c1 + result.delta_axial * axis
 
+        # Grow the displayed circle radius whenever the offset between the
+        # two centers exceeds the default radius -- so the picture makes
+        # the misalignment visually obvious instead of silently overlapping.
+        # Both circles share one default radius, so both grow together by
+        # the same amount when triggered (smoothly animated via the normal
+        # position-lerp below, since it only changes vertex positions).
+        offset = result.radial_displacement
+        effective_radius = (
+            _DISPLAY_RADIUS + offset if offset > _DISPLAY_RADIUS else _DISPLAY_RADIUS
+        )
+
         new_positions = {
-            "_hole_1_item": _circle_points(c1, axis, _DISPLAY_RADIUS),
-            "_hole_2_item": _circle_points(c2, axis, _DISPLAY_RADIUS),
+            "_hole_1_item": _circle_points(c1, axis, effective_radius),
+            "_hole_2_item": _circle_points(c2, axis, effective_radius),
             "_axial_item": np.array([c1, nearest_on_axis]),
             "_radial_item": np.array([nearest_on_axis, c2]),
             "_straight_item": np.array([c1, c2]),
@@ -121,3 +138,12 @@ class CircularityGLWidget(BaseGLWidget):
                 getattr(self, name).setData(pos=pos)
 
         self._apply_visibility_overrides()
+
+        # Keep the "C1"/"C2" text labels pinned to the current centers.
+        color_c1 = _to_qcolor(get_color("COLOR_PLANE_POINT")).getRgbF()
+        color_c2 = _to_qcolor(get_color("COLOR_INSPECTION_POINT")).getRgbF()
+        desired_labels = {
+            "C1": (c1, color_c1, "C1"),
+            "C2": (c2, color_c2, "C2"),
+        }
+        _sync_labels(self, self._center_labels, desired_labels)
