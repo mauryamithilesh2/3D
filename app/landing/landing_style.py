@@ -15,7 +15,7 @@ QWidget#LandingPageContainer {
 
 /* Header Branding */
 QWidget#LogoWidgetContainer {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1a1d27, stop:1 #14161f);
+    background-color: #212121;
     border-bottom: 1px solid #2a2f3d;
     padding: 24px 40px;
 }

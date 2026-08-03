@@ -21,7 +21,7 @@ from graphics.label_manager import _sync_labels
 #: Visual-only hole radius for drawing the circle rings. The PLC only
 #: supplies center points, not bore diameter, so this is illustrative --
 #: it does not affect any of the computed numbers.
-_DISPLAY_RADIUS = 8.0
+_DISPLAY_RADIUS = 5.0
 _CIRCLE_SEGMENTS = 48
 
 
@@ -91,13 +91,10 @@ class CircularityGLWidget(BaseGLWidget):
         # Grow the displayed circle radius whenever the offset between the
         # two centers exceeds the default radius -- so the picture makes
         # the misalignment visually obvious instead of silently overlapping.
-        # Both circles share one default radius, so both grow together by
-        # the same amount when triggered (smoothly animated via the normal
-        # position-lerp below, since it only changes vertex positions).
+        # When triggered, the radius BECOMES the shear distance itself
+        # (not default + shear); below the threshold, radius is unchanged.
         offset = result.radial_displacement
-        effective_radius = (
-            _DISPLAY_RADIUS + offset if offset > _DISPLAY_RADIUS else _DISPLAY_RADIUS
-        )
+        effective_radius = offset if offset > _DISPLAY_RADIUS else _DISPLAY_RADIUS
 
         new_positions = {
             "_hole_1_item": _circle_points(c1, axis, effective_radius),

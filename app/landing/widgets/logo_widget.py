@@ -61,13 +61,14 @@ def create_logo_widget(
         pixmap = QPixmap(logo_path)
         if not pixmap.isNull():
             label = QLabel()
+            label.setAttribute(Qt.WA_StyledBackground, True)
             label.setFixedSize(size[0], size[1])
             scaled_pm = pixmap.scaled(
                 size[0], size[1], Qt.KeepAspectRatio, Qt.SmoothTransformation
             )
             label.setPixmap(scaled_pm)
             label.setAlignment(Qt.AlignCenter)
-            label.setStyleSheet("background: transparent;")
+            label.setStyleSheet("background-color: #ffffff;")  # white background for logo
             return label
 
     # Fallback vector SVG widget
