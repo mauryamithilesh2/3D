@@ -21,11 +21,14 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QComboBox,
+    QCheckBox,
     )
 
 from core.circularity import _WORLD_X, _WORLD_Y, _WORLD_Z, measure_concentricity
 from ui.styles import get_button_style, get_field_style, get_group_style, get_ui_color, _make_coord_edit
 from utils import format_number, parse_float
+from plc import connection_manager as plc_conn
+from plc.point_registers import DATA_TYPE, SCALE_FACTOR, CIRCULARITY_HOLE_REGISTERS
 
 _BASE_AXIS_OPTIONS: dict[str, tuple[np.ndarray, str, str]] = {
     "X": (_WORLD_X, "Y", "Z"),
@@ -90,17 +93,32 @@ class CircularityPanel(QWidget):
         axis_layout = QHBoxLayout(self._axis_box)
         axis_layout.setContentsMargins(8, 10, 8, 8)
         axis_layout.setSpacing(6)
+
         axis_layout.addWidget(QLabel("Axis"))
         self._axis_combo = QComboBox()
         self._axis_combo.addItems(list(_BASE_AXIS_OPTIONS.keys()))
         self._axis_combo.setStyleSheet(get_field_style())
         self._axis_combo.currentTextChanged.connect(self.measure)
+
+        self._axis_combo.setEnabled(False)  # auto-detect is on by default
+
         axis_layout.addWidget(self._axis_combo)
+
+        self._auto_axis_checkbox = QCheckBox("Auto-detect")
+        self._auto_axis_checkbox.setChecked(True)
+        self._auto_axis_checkbox.stateChanged.connect(self._on_auto_axis_toggled)
+        axis_layout.addWidget(self._auto_axis_checkbox)
+
         axis_layout.addStretch(1)
 
         outer.addWidget(self._hole_1_box)
         outer.addWidget(self._hole_2_box)
         outer.addWidget(self._axis_box)
+
+        self._load_plc_button = QPushButton("Load from PLC")
+        self._load_plc_button.setStyleSheet(get_button_style())
+        self._load_plc_button.clicked.connect(self.load_from_plc)
+        outer.addWidget(self._load_plc_button)
 
         self._measure_button = QPushButton("Measure Concentricity")
         self._measure_button.setStyleSheet(get_button_style())
@@ -137,15 +155,72 @@ class CircularityPanel(QWidget):
     def _read_vector(self, edits: dict[str, QLineEdit]) -> np.ndarray:
         return np.array([parse_float(edits[axis].text()) for axis in ("X", "Y", "Z")], dtype=np.float64)
 
+    def _read_plc_point(self, addresses: tuple[int, int, int]) -> tuple[float, float, float] | None:
+        """Read one X/Y/Z point from the PLC (or SIMULATED_REGISTERS if no
+        real PLC is connected). Mirrors MainWindow._read_plc_point."""
+        needs_scaling = DATA_TYPE in ("INT16", "UINT16", "INT32")
+        values = []
+        for address in addresses:
+            raw = plc_conn.operations.read(address, DATA_TYPE)
+            if raw is None:
+                return None
+            values.append(raw / SCALE_FACTOR if needs_scaling else raw)
+        return tuple(values)
+
+    def load_from_plc(self) -> None:
+        """Read both hole centers from the PLC, fill the X/Y/Z fields, and
+        immediately re-measure so the graph updates."""
+        hole_1 = self._read_plc_point(CIRCULARITY_HOLE_REGISTERS["Hole 1 Center"])
+        hole_2 = self._read_plc_point(CIRCULARITY_HOLE_REGISTERS["Hole 2 Center"])
+        if hole_1 is None or hole_2 is None:
+            self.window().statusBar().showMessage(
+                "PLC read failed — check PLC connection", 4000
+            )
+            return
+
+        for value, axis in zip(hole_1, ("X", "Y", "Z")):
+            self._hole_1_edits[axis].setText(format_number(value))
+        for value, axis in zip(hole_2, ("X", "Y", "Z")):
+            self._hole_2_edits[axis].setText(format_number(value))
+
+        self.measure()
+
+    def _on_auto_axis_toggled(self, state: int) -> None:
+        """Enable/disable manual axis selection based on the checkbox."""
+        is_auto = state == Qt.Checked
+        self._axis_combo.setEnabled(not is_auto)
+        self.measure()
+
+    def _detect_axis(self, center_1: np.ndarray, center_2: np.ndarray) -> str:
+        """Pick whichever world axis (X/Y/Z) the two centers are separated
+        along the most, and use it as the nominal rod axis.
+
+        CAVEAT: this derives the axis from the same two points being
+        measured, so it is NOT a true independent nominal axis -- it will
+        tend to flatter the result (radial_displacement biased low) versus
+        a real machine/design axis. Uncheck "Auto-detect" and pick the
+        known machine axis manually whenever accuracy matters more than
+        convenience.
+        """
+        offset = np.asarray(center_2, dtype=np.float64) - np.asarray(center_1, dtype=np.float64)
+        idx = int(np.argmax(np.abs(offset)))
+        return ("X", "Y", "Z")[idx]
+
     def measure(self) -> None:
         """Read the current inputs, compute concentricity, and update the
         result labels. Emits :attr:`measured` on success so a listener
         (e.g. the 3D viewport) can redraw."""
         center_1 = self._read_vector(self._hole_1_edits)
         center_2 = self._read_vector(self._hole_2_edits)
-        axis_name = self._axis_combo.currentText()
+        if self._auto_axis_checkbox.isChecked():
+            axis_name = self._detect_axis(center_1, center_2)
+            self._axis_combo.blockSignals(True)
+            self._axis_combo.setCurrentText(axis_name)
+            self._axis_combo.blockSignals(False)
+        else:
+            axis_name = self._axis_combo.currentText()
         rod_axis, other_1_name, other_2_name = _BASE_AXIS_OPTIONS[axis_name]
-
+        
         try:
             result = measure_concentricity(center_1, center_2, rod_axis=rod_axis)
         except ValueError:

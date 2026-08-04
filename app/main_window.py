@@ -41,7 +41,13 @@ from ui import (
     RightPanel,
 )
 from ui.toolbar import _TOGGLES, AxisAngleWidget
-from plc.plc_registers import PLC_POINTS, PLC_INSPECTION_POINTS
+from plc import connection_manager as plc_conn
+from plc.point_registers import (
+    DATA_TYPE,
+    SCALE_FACTOR,
+    REFERENCE_POINT_REGISTERS,
+    INSPECTION_POINT_REGISTERS,
+)
 
 
 class MainWindow(BaseModuleWindow):
@@ -212,30 +218,70 @@ class MainWindow(BaseModuleWindow):
     # PLC point loading
     # ------------------------------------------------------------------
 
-    def add_plc_point(self) -> None:
-        """Add the NEXT plane point from the hard-coded PLC registers.
+    def _read_plc_point(self, addresses: tuple[int, int, int]) -> tuple[float, float, float] | None:
+        """Read one point's X/Y/Z from the live PLC (real connection, or
+        SIMULATED_REGISTERS if no real PLC is connected -- see
+        plc/read_write.py). `addresses` is (addr_x, addr_y, addr_z).
 
-        One click == one register consumed, in table order. Once every
-        register in :data:`PLC_POINTS` has been added, further clicks are a
-        no-op. The point is also marked "active" (via ``update_plane_point``)
-        so it immediately participates in the plane fit and shows up in the
-        3D view -- ``add_plane_point`` alone only adds it to the list.
+        SCALE_FACTOR only applies to integer register types (INT16/UINT16/
+        INT32) -- those can't natively hold a decimal, so the PLC sends a
+        scaled whole number and we divide it back out here. FLOAT32/DOUBLE
+        registers already carry real decimal precision on the wire, so they
+        are passed through unscaled; dividing them by SCALE_FACTOR too would
+        silently corrupt an already-correct value.
+
+        Returns None if ANY axis fails to read, rather than silently
+        returning a partial/garbage point -- a bad read should never sneak
+        a wrong point into the plane fit or inspection list.
         """
-        registers = list(PLC_POINTS.keys())
-        if self._plc_point_cursor >= len(registers):
+        needs_scaling = DATA_TYPE in ("INT16", "UINT16", "INT32")
+
+        values = []
+        for address in addresses:
+            raw = plc_conn.operations.read(address, DATA_TYPE)
+            if raw is None:
+                return None
+            values.append(raw / SCALE_FACTOR if needs_scaling else raw)
+        return tuple(values)
+
+    def add_plc_point(self) -> None:
+        """Add the NEXT plane point, read live from the PLC via
+        REFERENCE_POINT_REGISTERS (plc/point_registers.py).
+
+        One click == one point consumed, in table order. Once every point
+        has been added, further clicks are a no-op. If the read fails (PLC
+        not connected AND no simulated value for that register), the click
+        is also a no-op -- the cursor does not advance, so the same point
+        will be retried on the next click rather than being skipped.
+        """
+        names = list(REFERENCE_POINT_REGISTERS.keys())
+        if self._plc_point_cursor >= len(names):
             return
-        point = PLC_POINTS[registers[self._plc_point_cursor]]
+        addresses = REFERENCE_POINT_REGISTERS[names[self._plc_point_cursor]]
+        point = self._read_plc_point(addresses)
+        if point is None:
+            self.statusBar().showMessage(
+                "PLC read failed — check PLC connection (see status bar on landing page)", 4000
+            )
+            return
         label = self._point_manager.add_plane_point(*point)
         self._point_manager.update_plane_point(label, *point)
         self._plc_point_cursor += 1
 
     def add_plc_inspection_point(self) -> None:
-        """Add the NEXT inspection point from the hard-coded PLC registers,
-        one register per click, same cursor pattern as :meth:`add_plc_point`."""
-        registers = list(PLC_INSPECTION_POINTS.keys())
-        if self._plc_inspection_cursor >= len(registers):
+        """Add the NEXT inspection point, read live from the PLC via
+        INSPECTION_POINT_REGISTERS. Same cursor and failed-read behavior as
+        :meth:`add_plc_point`."""
+        names = list(INSPECTION_POINT_REGISTERS.keys())
+        if self._plc_inspection_cursor >= len(names):
             return
-        point = PLC_INSPECTION_POINTS[registers[self._plc_inspection_cursor]]
+        addresses = INSPECTION_POINT_REGISTERS[names[self._plc_inspection_cursor]]
+        point = self._read_plc_point(addresses)
+        if point is None:
+            self.statusBar().showMessage(
+                "PLC read failed — check PLC connection (see status bar on landing page)", 4000
+            )
+            return
         self._point_manager.add_inspection_point(*point)
         self._plc_inspection_cursor += 1
 

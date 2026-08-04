@@ -97,7 +97,7 @@ QLabel#CardBulletItem {
 /* Open Module Button */
 QPushButton#OpenModuleBtn {
     background-color: #2563eb;
-    color: #ffffff;
+    color: #00b0ff;
     border: none;
     border-radius: 8px;
     padding: 11px 20px;
@@ -135,6 +135,26 @@ QLabel#StatusPillReady {
     font-weight: 600;
 }
 
+QLabel#StatusPillWarning {
+    background-color: #332905;
+    color: #fbbf24;
+    border: 1px solid #5c4a10;
+    border-radius: 10px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+QLabel#StatusPillError {
+    background-color: #350f11;
+    color: #f87171;
+    border: 1px solid #5c1c1f;
+    border-radius: 10px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
 QLabel#StatusPillLicense {
     background-color: #1a273b;
     color: #4f8ff7;
@@ -143,5 +163,36 @@ QLabel#StatusPillLicense {
     padding: 3px 10px;
     font-size: 11px;
     font-weight: 600;
+}
+
+QLineEdit#PlcIpInput, QLineEdit#PlcPortInput {
+    background-color: #1a1e29;
+    color: #e2e8f0;
+    border: 1px solid #2b3e5e;
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+QLineEdit#PlcIpInput:focus, QLineEdit#PlcPortInput:focus {
+    border: 1px solid #4f8ff7;
+}
+
+QPushButton#PlcConnectBtn {
+    background-color: #2563eb;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 14px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QPushButton#PlcConnectBtn:hover {
+    background-color: #1d4ed8;
+}
+
+QPushButton#PlcConnectBtn:pressed {
+    background-color: #1e40af;
 }
 """
