@@ -22,6 +22,7 @@ from graphics.frame_renderer import _update_local_axes, _update_normal_arrow
 from graphics.ghost_renderer import _render_ghost_history
 from graphics.gl_utils import _lerp
 from graphics.label_manager import _sync_labels
+from graphics.orientation_renderer import _update_orientation_overlay
 from graphics.plane_renderer import _update_plane_and_normal
 from graphics.point_renderer import _update_inspection_points, _update_plane_points
 from graphics.scene_dynamic import _build_dynamic_items
@@ -112,6 +113,8 @@ class GL3DWidget(BaseGLWidget):
         reference_point: np.ndarray | None = None,
         inspection_points: list[tuple[str, np.ndarray]] | None = None,
         reference_label: str | None = None,
+        inspection_plane_result: BestFitPlaneResult | None = None,
+        active_orientation_check: str | None = None,
         animate: bool = True,
     ) -> None:
         """Refresh every dynamic item in the scene from current geometry."""
@@ -126,27 +129,45 @@ class GL3DWidget(BaseGLWidget):
             "reference_point": reference_point,
             "inspection_points": inspection_points,
             "reference_label": reference_label,
+            "inspection_plane_result": inspection_plane_result,
+            "active_orientation_check": active_orientation_check,
         }
 
         before = self._snapshot_animatable() if animate else None
 
         self._update_plane_points(plane_points, coordinate_system, reference_label)
-# old code
-#         self._update_inspection_points(inspection_measurements, reference_selected)
-
-# new code
         self._update_inspection_points(inspection_measurements, reference_selected, inspection_points=inspection_points)
         self._update_plane_and_normal(plane_points, plane_result, coordinate_system)
         self._update_local_axes(coordinate_system)
         self._update_normal_arrow(plane_result, coordinate_system)
-        self._update_distance_lines(inspection_measurements, reference_point, reference_selected)
-        self._update_dotted_lines(
-            inspection_points or [],
-            inspection_measurements,
-            coordinate_system,
-            reference_selected=reference_selected,
-            reference_point=reference_point,
-        )
+
+        if inspection_plane_result is None:
+            self._update_distance_lines(inspection_measurements, reference_point, reference_selected)
+            self._update_dotted_lines(
+                inspection_points or [],
+                inspection_measurements,
+                coordinate_system,
+                reference_selected=reference_selected,
+                reference_point=reference_point,
+            )
+        else:
+            # Perpendicularity/Parallelism: Inspection Points form a PLANE,
+            # not individual points of interest -- neither the per-point
+            # perpendicular drop-lines (distance-to-Reference-Plane) nor
+            # the World/Local coordinate-projection construction lines
+            # apply, so both are removed rather than merely hidden.
+            self._distance_lines_item.setData(pos=np.empty((0, 3)))
+            self._distance_lines_item.setVisible(False)
+            self._projection_points_item.setData(pos=np.empty((0, 3)))
+            self._projection_points_item.setVisible(False)
+            self._world_dotted_item.setData(pos=np.empty((0, 3)))
+            self._world_dotted_item.setVisible(False)
+            self._local_dotted_item.setData(pos=np.empty((0, 3)))
+            self._local_dotted_item.setVisible(False)
+            self._inspection_points_cross_item.setData(pos=np.empty((0, 3)))
+            self._inspection_points_cross_item.setVisible(False)
+
+        self._update_orientation_overlay(plane_result, inspection_plane_result, active_orientation_check)
 
         self._apply_visibility_overrides()
 
@@ -278,15 +299,8 @@ class GL3DWidget(BaseGLWidget):
     ) -> None:
         _update_plane_points(self, plane_points, coordinate_system, reference_label)
 
-# old code
-#     def _update_inspection_points(
-#         self,
-#         measurements: list[PointMeasurement],
-#         reference_selected: bool = False,
-#     ) -> None:
-#         _update_inspection_points(self, measurements, reference_selected)
 
-# new code
+    # new code
     def _update_inspection_points(
         self,
         measurements: list[PointMeasurement],
@@ -337,6 +351,14 @@ class GL3DWidget(BaseGLWidget):
             reference_selected=reference_selected,
             reference_point=reference_point,
         )
+
+    def _update_orientation_overlay(
+            self,
+            reference_plane_result: BestFitPlaneResult | None,
+            inspection_plane_result: BestFitPlaneResult | None,
+            active_check: str | None = None,
+        ) -> None:
+            _update_orientation_overlay(self, reference_plane_result, inspection_plane_result, active_check)
 
     def _sync_labels(
         self,

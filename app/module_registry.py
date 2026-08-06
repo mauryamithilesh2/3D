@@ -12,26 +12,23 @@ from typing import Callable
 
 from app.circularity_window import CircularityWindow
 from app.main_window import MainWindow
+from app.perpendicularity_window import PerpendicularityWindow
 
 
 def _distance_window() -> MainWindow:
     return MainWindow(module="distance")
 
 
-def _parallelism_window() -> MainWindow:
-    # Parallelism & Perpendicularity module has no dedicated implementation
-    # yet -- falls back to the Distance module window (existing behavior)
-    # rather than crashing. Once it gets its own dedicated window class, it
-    # will follow the same _init_chrome + _init_toolbar contract as Circularity.
-    return MainWindow(module="parallelism")
-
 
 MODULE_WINDOWS: dict[str, Callable[[], object]] = {
     "distance": _distance_window,
     "circularity": CircularityWindow,
-    "parallelism": _parallelism_window,
+    # Parallelism has no dedicated datum-plane picker yet, so its landing
+    # card opens PerpendicularityWindow -- both are the exact same
+    # ModuleSpec-driven pipeline (see app/module_specs.py). Once Parallelism
+    # gets its own spec entry, point this at a ParallelismWindow instead.
+    "parallelism": PerpendicularityWindow,
 }
-
 
 def create_module_window(module_id: str):
     """Instantiate the window for ``module_id``, falling back to the

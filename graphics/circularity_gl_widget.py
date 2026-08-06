@@ -22,6 +22,9 @@ from graphics.label_manager import _sync_labels
 #: supplies center points, not bore diameter, so this is illustrative --
 #: it does not affect any of the computed numbers.
 _DISPLAY_RADIUS = 5.0
+#: visible ring instead of collapsing to an invisible point. Never used
+#: when the real offset is bigger than this.
+_MIN_OFFSET_CIRCLE_RADIUS = 0.5
 _CIRCLE_SEGMENTS = 48
 
 
@@ -93,12 +96,11 @@ class CircularityGLWidget(BaseGLWidget):
         # the misalignment visually obvious instead of silently overlapping.
         # When triggered, the radius BECOMES the shear distance itself
         # (not default + shear); below the threshold, radius is unchanged.
-        offset = result.radial_displacement
-        effective_radius = offset if offset > _DISPLAY_RADIUS else _DISPLAY_RADIUS
+        offset_radius = max(result.radial_displacement, _MIN_OFFSET_CIRCLE_RADIUS)
 
         new_positions = {
-            "_hole_1_item": _circle_points(c1, axis, effective_radius),
-            "_hole_2_item": _circle_points(c2, axis, effective_radius),
+              "_hole_1_item": _circle_points(c1, axis, _DISPLAY_RADIUS),
+            "_hole_2_item": _circle_points(nearest_on_axis, axis, offset_radius),
             "_axial_item": np.array([c1, nearest_on_axis]),
             "_radial_item": np.array([nearest_on_axis, c2]),
             "_straight_item": np.array([c1, c2]),

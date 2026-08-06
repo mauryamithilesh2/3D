@@ -32,6 +32,7 @@ from config import (
     PROJECTION_POINT_SIZE,
     REFERENCE_GLOW_SIZE,
 )
+from config.colors import get_color
 from graphics.gl_utils import _make_color_array, _to_qcolor
 
 _LABEL_FONT = QFont("Consolas", 8)
@@ -57,7 +58,7 @@ def _build_dynamic_items(widget: gl.GLViewWidget) -> None:
 
     # Ghost / history mode: a fixed-size pool of translucent plane meshes
     # reused every refresh (never recreated) to show previous plane fits.
-    widget._ghost_mesh_items: list[gl.GLMeshItem] = []
+    widget._ghost_mesh_items = []
     for _ in range(GHOST_HISTORY_DEPTH):
         ghost = gl.GLMeshItem(
             meshdata=placeholder,
@@ -240,3 +241,97 @@ def _build_dynamic_items(widget: gl.GLViewWidget) -> None:
     widget._normal_head_item.setColor(COLOR_NORMAL_HEAD)
     widget._normal_head_item.setVisible(False)
     widget.addItem(widget._normal_head_item)
+
+    # Perpendicularity/Parallelism overlay -- Inspection Plane surface (a
+    # SECOND translucent mesh, distinct color from the Reference Plane) plus
+    # the angle arc + degree readouts between the two planes' normals. Built
+    # once here, populated only when both planes are fitted (see
+    # graphics/orientation_renderer.py). Inert for every other module --
+    # never shown unless an Inspection Plane is actually supplied.
+    widget._inspection_plane_mesh_item = gl.GLMeshItem(
+        meshdata=placeholder,
+        smooth=False,
+        drawEdges=True,
+        edgeColor=get_color("COLOR_INSPECTION_PLANE"),
+        shader=None,
+        computeNormals=False,
+        glOptions="translucent",
+    )
+    widget._inspection_plane_mesh_item.setVisible(False)
+    widget.addItem(widget._inspection_plane_mesh_item)
+
+    widget._orientation_arc_item = gl.GLLinePlotItem(
+        pos=np.zeros((2, 3)),
+        color=get_color("COLOR_ANGLE_ARC"),
+        width=2.5,
+        mode="line_strip",
+        antialias=True,
+        glOptions="opaque",
+    )
+    widget._orientation_arc_item.setVisible(False)
+    widget.addItem(widget._orientation_arc_item)
+
+    widget._orientation_perp_label = gl.GLTextItem(
+        pos=np.zeros(3), text="", color=_to_qcolor(get_color("COLOR_ANGLE_ARC")), font=_LABEL_FONT
+    )
+    widget._orientation_perp_label.setVisible(False)
+    widget.addItem(widget._orientation_perp_label)
+
+    widget._orientation_parallel_label = gl.GLTextItem(
+        pos=np.zeros(3), text="", color=_to_qcolor(get_color("COLOR_ANGLE_ARC")), font=_LABEL_FONT
+    )
+    widget._orientation_parallel_label.setVisible(False)
+    widget.addItem(widget._orientation_parallel_label)
+
+    # EXISTING lines 263-272:
+    widget._orientation_arc_item = gl.GLLinePlotItem(
+        pos=np.zeros((2, 3)),
+        color=get_color("COLOR_ANGLE_ARC"),
+        width=2.5,
+        mode="line_strip",
+        antialias=True,
+        glOptions="opaque",
+    )
+    widget._orientation_arc_item.setVisible(False)
+    widget.addItem(widget._orientation_arc_item)
+
+    # INSERT right after line 272:
+    widget._orientation_intersection_line_item = gl.GLLinePlotItem(
+        pos=np.zeros((2, 3)),
+        color=get_color("COLOR_ANGLE_ARC"),
+        width=2.0,
+        mode="lines",
+        antialias=True,
+        glOptions="opaque",
+    )
+    widget._orientation_intersection_line_item.setVisible(False)
+    widget.addItem(widget._orientation_intersection_line_item)
+
+    # Inspection Plane's OWN normal arrow (shaft + cone head) -- mirrors
+    # the Reference Plane normal built above, so both planes are always
+    # independently visualizable, not just the Reference Plane.
+    widget._inspection_normal_line_item = gl.GLLinePlotItem(
+        pos=np.zeros((2, 3)),
+        color=get_color("COLOR_INSPECTION_NORMAL"),
+        width=2.5,
+        mode="line_strip",
+        antialias=True,
+        glOptions="opaque",
+    )
+    widget._inspection_normal_line_item.setVisible(False)
+    widget.addItem(widget._inspection_normal_line_item)
+
+    inspection_cone_placeholder = gl.MeshData(
+        vertexes=np.zeros((3, 3)),
+        faces=np.array([[0, 1, 2]]),
+    )
+    widget._inspection_normal_head_item = gl.GLMeshItem(
+        meshdata=inspection_cone_placeholder,
+        smooth=True,
+        drawEdges=False,
+        shader="shaded",
+        glOptions="opaque",
+    )
+    widget._inspection_normal_head_item.setColor(get_color("COLOR_INSPECTION_NORMAL"))
+    widget._inspection_normal_head_item.setVisible(False)
+    widget.addItem(widget._inspection_normal_head_item)

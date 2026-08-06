@@ -19,9 +19,11 @@ from PyQt5.QtWidgets import (
 )
 
 from config import LEFT_PANEL_MIN_WIDTH
+
 from ui.edge_axis_selector import EdgeAxisSelector
 from ui.plane_angle_panel import PlaneAnglePanel
 from ui.point_list_panel import PointListPanel
+
 from ui.reference_distance_panel import ReferenceDistancePanel
 from ui.reference_selector import ReferenceSelector
 from ui.styles import (
@@ -45,6 +47,7 @@ class LeftPanel(QWidget):
         reference_distance_panel: ReferenceDistancePanel | None = None,
         plane_angle_panel: PlaneAnglePanel | None = None,
         edge_axis_selector: EdgeAxisSelector | None = None,
+        show_reference_selector: bool = True,
     ) -> None:
         super().__init__()
         self._plane_points_panel = plane_points_panel
@@ -95,7 +98,8 @@ class LeftPanel(QWidget):
 
         if reference_distance_panel is not None:
             layout.addWidget(reference_distance_panel)
-        layout.addWidget(reference_selector)
+        if show_reference_selector:
+            layout.addWidget(reference_selector)
         if edge_axis_selector is not None:
             layout.addWidget(edge_axis_selector)
         layout.addStretch()
@@ -124,5 +128,6 @@ class LeftPanel(QWidget):
             self._plane_angle_panel,
             self._edge_axis_selector,
         ):
+            
             if widget is not None and hasattr(widget, "restyle"):
                 widget.restyle()

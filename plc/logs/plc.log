@@ -1,2 +1,14 @@
 [2026-08-03 23:03:43] [ERROR] Connection error: Connection Failed
 [2026-08-03 23:03:43] [INFO] Simulation mode ENABLED
+[2026-08-04 15:02:27] [ERROR] Connection error: Connection Failed
+[2026-08-04 15:02:27] [INFO] Simulation mode ENABLED
+[2026-08-04 15:53:22] [INFO] Connected to PLC 192.168.3.39:5010
+[2026-08-04 15:53:34] [INFO] Disconnected from PLC
+[2026-08-04 15:53:39] [ERROR] Connection error: Connection Failed
+[2026-08-04 15:53:39] [INFO] Simulation mode ENABLED
+[2026-08-04 15:53:44] [INFO] Connected to PLC 192.168.3.39:5010
+[2026-08-04 15:54:30] [INFO] Disconnected from PLC
+[2026-08-04 16:05:28] [ERROR] Connection error: Connection Failed
+[2026-08-04 16:05:28] [INFO] Simulation mode ENABLED
+[2026-08-05 12:47:52] [INFO] Connected to PLC 192.168.3.39:5010
+[2026-08-05 12:48:35] [INFO] Disconnected from PLC

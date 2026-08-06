@@ -13,6 +13,16 @@ from core.best_fit_plane import (
 )
 from core.edge_axis import apply_edge_axis, apply_first_second_axis
 from core.circularity import ConcentricityResult, measure_concentricity, perpendicular_basis
+from core.perpendicularity import DATUM_AXIS_OPTIONS, PerpendicularityResult, measure_perpendicularity
+
+from core.orientation import (
+    OrientationResult,
+    angle_between_normals_deg,
+    measure_perpendicularity_planes,
+    measure_parallelism_planes,
+    ORIENTATION_CHECKS,
+)
+
 from core.coordinate_system import (
     CoordinateSystem,
     CoordinateSystemBuilder,
@@ -38,6 +48,14 @@ __all__ = [
     "ConcentricityResult",
     "measure_concentricity",
     "perpendicular_basis",
+    "DATUM_AXIS_OPTIONS",
+    "PerpendicularityResult",
+    "measure_perpendicularity",
+    "OrientationResult",
+    "angle_between_normals_deg",
+    "measure_perpendicularity_planes",
+    "measure_parallelism_planes",
+    "ORIENTATION_CHECKS",
     "CoordinateSystem",
     "CoordinateSystemBuilder",
     "CoordinateSystemError",

@@ -4,9 +4,7 @@ app/landing/widgets/logo_widget.py
 Header widget displaying Company Logo (SVG), Company Name, Software Name,
 Subtitle, and Version Badge in an industrial layout.
 """
-
 from __future__ import annotations
-
 import os
 from PyQt5.QtCore import QByteArray, Qt
 from PyQt5.QtGui import QPixmap
@@ -127,4 +125,3 @@ class LogoWidget(QFrame):
         layout.addWidget(logo_icon_widget)
         layout.addLayout(text_layout, stretch=1)
         layout.addWidget(version_label, alignment=Qt.AlignVCenter)
-

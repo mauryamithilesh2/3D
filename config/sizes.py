@@ -38,6 +38,16 @@ NORMAL_ARROW_HEAD_RADIUS: Final[float] = 0.55
 
 #: Length the local (reference-point) coordinate frame axes are drawn with.
 LOCAL_AXIS_DISPLAY_LENGTH: Final[float] = 4.5
+#: Radius of the Perpendicularity/Parallelism angle-arc indicator, and the
+#: half-width of the rendered Inspection Plane surface (world units).
+ORIENTATION_ARC_RADIUS: Final[float] = 8.0
+ORIENTATION_PLANE_HALF_EXTENT: Final[float] = 20.0
+
+#: Half-length of the drawn line segment where the Reference Plane and
+#: Inspection Plane actually intersect (world units). The angle arc and
+#: its degree label are anchored at the center of this segment.
+ORIENTATION_INTERSECTION_HALF_LENGTH: Final[float] = 25.0
+
 
 #: Marker size for the translucent glow halo behind the active reference point.
 REFERENCE_GLOW_SIZE: Final[float] = 34.0

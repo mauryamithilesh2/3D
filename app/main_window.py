@@ -25,8 +25,6 @@ from core import (
     MeasurementEngine,
     OriginReference,
     PlaneFitError,
-    edge_axis,
-    apply_edge_axis,
     apply_first_second_axis,
 )
 from graphics import GL3DWidget
@@ -41,12 +39,17 @@ from ui import (
     RightPanel,
 )
 from ui.toolbar import _TOGGLES, AxisAngleWidget
+# from ui.orientation_result_panel import ORIENTATION_PANEL_FACTORIES
+from ui.orientation_result_panel import OrientationResultPanel
+from app.module_specs import get_module_spec
 from plc import connection_manager as plc_conn
 from plc.point_registers import (
     DATA_TYPE,
     SCALE_FACTOR,
     REFERENCE_POINT_REGISTERS,
     INSPECTION_POINT_REGISTERS,
+    MODULE_REFERENCE_POINT_REGISTERS,
+    MODULE_INSPECTION_POINT_REGISTERS,
 )
 
 
@@ -57,13 +60,10 @@ class MainWindow(BaseModuleWindow):
 
     def __init__(self, module: str | None = None) -> None:
         super().__init__()
+
         self.module = module or "distance"
-        module_titles = {
-            "distance": "Distance & Coordinate Measurement",
-            "circularity": "Circularity & Concentricity",
-            "parallelism": "Parallelism & Perpendicularity",
-        }
-        self.module_title = module_titles.get(self.module, self.module.title())
+        self._module_spec = get_module_spec(self.module)
+        self.module_title = self._module_spec.window_title
         self._init_chrome(self.module_title)
 
         self._point_manager = PointManager(parent=self)
@@ -72,13 +72,14 @@ class MainWindow(BaseModuleWindow):
         # Cursors into the hard-coded PLC register tables -- each click of
         # "Add" consumes the next register in order instead of dumping all
         # of them in at once.
-        self._plc_point_cursor = 0
-        self._plc_inspection_cursor = 0
+        # self._plc_point_cursor = 0
+        # self._plc_inspection_cursor = 0
 
         # -- Build widgets ---------------------------------------------
         self._left_panel, self._reference_selector = self._build_left_panel()
         self._gl_widget = GL3DWidget()
         self._right_panel = RightPanel()
+        self._install_orientation_panel()
 
         self._axis_angle_widget = AxisAngleWidget(self)
         self._init_toolbar(self._gl_widget, _TOGGLES, extra_widget=self._axis_angle_widget)
@@ -157,6 +158,29 @@ class MainWindow(BaseModuleWindow):
 
         self._status_reference_label.setText(f"Reference: {reference_label or 'World Origin'}")
 
+
+    # ------------------------------------------------------------------
+    # Shared right-panel Orientation Result Panel
+    # ------------------------------------------------------------------
+
+    def _install_orientation_panel(self) -> None:
+        """Attach the shared OrientationResultPanel (Reference Plane vs.
+        Inspection Plane, Perpendicularity/Parallelism toggle) to
+        RightPanel when this module's spec declares an orientation_kind.
+        This never hardcodes a GD&T check by name -- see
+        core/orientation.py: ORIENTATION_CHECKS."""
+        self._orientation_panel = None
+        if self._module_spec.orientation_kind is not None:
+            self._orientation_panel = OrientationResultPanel(
+                default_check=self._module_spec.orientation_kind
+            )
+            self._right_panel.add_orientation_panel(self._orientation_panel)
+            # Neither pairwise point-to-point distance nor the generic Live
+            # Info readout has GD&T meaning for a plane-to-plane check --
+            # keep this module's right panel small and focused instead of
+            # dragging the Distance module's tabs into it.
+            self._right_panel.set_pairwise_distances_visible(False)
+            self._right_panel.set_live_info_visible(False)
     # ------------------------------------------------------------------
     # Left panel assembly
     # ------------------------------------------------------------------
@@ -166,7 +190,7 @@ class MainWindow(BaseModuleWindow):
         default_x, default_y, default_z = DEFAULT_NEW_POINT
 
         plane_panel = PointListPanel(
-            title="Plane Points",
+            title=self._module_spec.plane_feature_label,
             get_points=lambda: list(
                 zip(
                     self._point_manager.plane_point_labels(),
@@ -183,33 +207,41 @@ class MainWindow(BaseModuleWindow):
         )
 
         inspection_panel = PointListPanel(
-            title="Inspection Points",
+            title=self._module_spec.inspection_feature_label,
             get_points=self._point_manager.inspection_points,
             add_point=self.add_plc_inspection_point,
             update_point=self._point_manager.update_inspection_point,
             remove_point=self._point_manager.remove_inspection_point,
-            min_count=0,
+            min_count=self._module_spec.inspection_min_points,
             changed_signal=self._point_manager.inspection_points_changed,
             reset_last_point=self._point_manager.remove_last_inspection_point,
             rename_point=self._point_manager.rename_inspection_point,
         )
-
         reference_selector = ReferenceSelector(
             get_plane_labels=self._point_manager.plane_point_labels,
             changed_signal=self._point_manager.plane_points_changed,
         )
 
+
         self._reference_distance_panel = ReferenceDistancePanel()
         self._plane_angle_panel = PlaneAnglePanel()
         self._edge_axis_selector = EdgeAxisSelector()
+
+        # Reference->Inspection Distance and the Local Axis Override are
+        # part of the DISTANCE workflow only. Which modules use them is now
+        # data (ModuleSpec.uses_distance_panel / uses_edge_axis) instead of
+        # a hardcoded module-name check -- this method never needs another
+        # `if` added for a future module.
+        spec = self._module_spec
 
         left_panel = LeftPanel(
             plane_panel,
             inspection_panel,
             reference_selector,
-            reference_distance_panel=self._reference_distance_panel,
-            plane_angle_panel=self._plane_angle_panel,
-            edge_axis_selector=self._edge_axis_selector,
+            reference_distance_panel=self._reference_distance_panel if spec.uses_distance_panel else None,
+            plane_angle_panel=self._plane_angle_panel if spec.show_plane_angle_panel else None,
+            edge_axis_selector=self._edge_axis_selector if spec.uses_edge_axis else None,
+            show_reference_selector=spec.show_reference_selector,
         )
 
         return left_panel, reference_selector
@@ -244,9 +276,29 @@ class MainWindow(BaseModuleWindow):
             values.append(raw / SCALE_FACTOR if needs_scaling else raw)
         return tuple(values)
 
+    def _reference_point_registers(self) -> dict[str, tuple[int, int, int]]:
+        """Plane-point register table for THIS module only.
+
+        Looks up ``self.module`` in MODULE_REFERENCE_POINT_REGISTERS
+        (plc/point_registers.py) so Perpendicularity reads its own 400-series
+        addresses instead of Distance's 100-series -- falls back to the
+        Distance module's table for any module id with no dedicated entry
+        yet (e.g. "parallelism").
+        """
+
+
+        return MODULE_REFERENCE_POINT_REGISTERS.get(self.module, REFERENCE_POINT_REGISTERS)
+
+    def _inspection_point_registers(self) -> dict[str, tuple[int, int, int]]:
+        """Inspection-point register table for THIS module only. See
+        :meth:`_reference_point_registers` -- same per-module lookup,
+        falling back to the Distance module's table otherwise."""
+        return MODULE_INSPECTION_POINT_REGISTERS.get(self.module, INSPECTION_POINT_REGISTERS)
+
     def add_plc_point(self) -> None:
-        """Add the NEXT plane point, read live from the PLC via
-        REFERENCE_POINT_REGISTERS (plc/point_registers.py).
+        """Add the NEXT plane point, read live from the PLC via this
+        module's own register table (see :meth:`_reference_point_registers`
+        -- Distance and Perpendicularity never read the same addresses).
 
         One click == one point consumed, in table order. Once every point
         has been added, further clicks are a no-op. If the read fails (PLC
@@ -254,10 +306,12 @@ class MainWindow(BaseModuleWindow):
         is also a no-op -- the cursor does not advance, so the same point
         will be retried on the next click rather than being skipped.
         """
-        names = list(REFERENCE_POINT_REGISTERS.keys())
-        if self._plc_point_cursor >= len(names):
+        registers = self._reference_point_registers()
+        names = list(registers.keys())
+        cursor = len(self._point_manager.plane_point_labels())
+        if cursor >= len(names):
             return
-        addresses = REFERENCE_POINT_REGISTERS[names[self._plc_point_cursor]]
+        addresses = registers[names[cursor]]
         point = self._read_plc_point(addresses)
         if point is None:
             self.statusBar().showMessage(
@@ -266,16 +320,17 @@ class MainWindow(BaseModuleWindow):
             return
         label = self._point_manager.add_plane_point(*point)
         self._point_manager.update_plane_point(label, *point)
-        self._plc_point_cursor += 1
 
     def add_plc_inspection_point(self) -> None:
-        """Add the NEXT inspection point, read live from the PLC via
-        INSPECTION_POINT_REGISTERS. Same cursor and failed-read behavior as
-        :meth:`add_plc_point`."""
-        names = list(INSPECTION_POINT_REGISTERS.keys())
-        if self._plc_inspection_cursor >= len(names):
+        """Add the NEXT inspection point, read live from the PLC via this
+        module's own register table (see :meth:`_inspection_point_registers`).
+        Same cursor and failed-read behavior as :meth:`add_plc_point`."""
+        registers = self._inspection_point_registers()
+        names = list(registers.keys())
+        cursor = len(self._point_manager.inspection_points())
+        if cursor >= len(names):
             return
-        addresses = INSPECTION_POINT_REGISTERS[names[self._plc_inspection_cursor]]
+        addresses = registers[names[cursor]]
         point = self._read_plc_point(addresses)
         if point is None:
             self.statusBar().showMessage(
@@ -283,7 +338,6 @@ class MainWindow(BaseModuleWindow):
             )
             return
         self._point_manager.add_inspection_point(*point)
-        self._plc_inspection_cursor += 1
 
     def _plane_local_points(self) -> list[tuple[str, np.ndarray]]:
         """Return plane points as ``(label, LOCAL coordinates)``."""
@@ -306,6 +360,7 @@ class MainWindow(BaseModuleWindow):
             (label, self._transformer.world_to_plane(coords).as_array())
             for label, coords in points
         ]
+
 
     def _update_plane_point_local(self, label: str, x: float, y: float, z: float) -> None:
         """Commit an edited LOCAL coordinate row back to the point manager."""
@@ -395,6 +450,27 @@ class MainWindow(BaseModuleWindow):
             if hasattr(self, "_axis_angle_widget"):
                 self._axis_angle_widget.display(None, None)
 
+        # Orientation modules (Perpendicularity/Parallelism): fit a SECOND
+        # best-fit plane from the Inspection Plane point set. BestFitPlane
+        # already rejects collinear/coincident points (PlaneFitError) -- 3
+        # points that only form a LINE never produce a fake plane; the
+        # panel is told exactly why it failed instead of a generic message.
+        inspection_plane_result = None
+        inspection_plane_error: str | None = None
+        if self._orientation_panel is not None:
+            inspection_pts = self._point_manager.inspection_points()
+            if len(inspection_pts) >= BestFitPlane.MIN_POINTS:
+                try:
+                    inspection_plane_result = BestFitPlane.fit(
+                        np.stack([coords for _, coords in inspection_pts])
+                    )
+                except PlaneFitError as exc:
+                    inspection_plane_result = None
+                    inspection_plane_error = str(exc)
+            self._orientation_panel.display(
+                plane_result, inspection_plane_result, inspection_error=inspection_plane_error
+            )
+
         if plane_result is not None and coordinate_system is not None:
             self._transformer = CoordinateTransformer(coordinate_system)
             measurements = MeasurementEngine.measure_points(
@@ -420,8 +496,12 @@ class MainWindow(BaseModuleWindow):
             reference_point=reference_point,
             inspection_points=self._point_manager.inspection_points(),
             reference_label=reference_label,
+            inspection_plane_result=inspection_plane_result,
+            active_orientation_check=(
+                self._orientation_panel.current_check()
+                if self._orientation_panel is not None else None
+            ),
         )
-
         if self._transformer is not None:
             for label, world_p in active_points.items():
                 loc_p = self._transformer.world_to_plane(world_p).as_array()

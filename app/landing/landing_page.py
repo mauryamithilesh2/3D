@@ -7,7 +7,6 @@ grid from module_config, and bottom industrial status bar.
 
 from __future__ import annotations
 
-from typing import Any
 from PyQt5.QtCore import QThread,Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QFrame,
@@ -129,26 +128,22 @@ class LandingPage(QWidget):
         self.plc_ip_input = QLineEdit()
         self.plc_ip_input.setObjectName("PlcIpInput")
         self.plc_ip_input.setPlaceholderText("PLC IP")
-        self.plc_ip_input.setText("127.0.0.1")
+        self.plc_ip_input.setText("192.168.3.39")
         self.plc_ip_input.setFixedWidth(110)
 
         self.plc_port_input = QLineEdit()
         self.plc_port_input.setObjectName("PlcPortInput")
         self.plc_port_input.setPlaceholderText("Port")
-        self.plc_port_input.setText("502")
+        self.plc_port_input.setText("5010")
         self.plc_port_input.setFixedWidth(60)
 
         self.plc_connect_btn = QPushButton("CONNECT")
         self.plc_connect_btn.setObjectName("PlcConnectBtn")
 
-        license_pill = QLabel("LICENSE: ENTERPRISE ACTIVE")
-        license_pill.setObjectName("StatusPillLicense")
-
         ver_text = QLabel("System Version: 1.0.0")
         ver_text.setObjectName("StatusText")
 
-        comp_text = QLabel("Precision Metrology Corp.")
-        comp_text.setObjectName("StatusText")
+
 
         copyright_text = QLabel("© 2026 Kadence Automation & Robotics System. All Rights Reserved.")
         copyright_text.setObjectName("StatusText")
@@ -157,9 +152,7 @@ class LandingPage(QWidget):
         layout.addWidget(self.plc_ip_input)
         layout.addWidget(self.plc_port_input)
         layout.addWidget(self.plc_connect_btn)
-        layout.addWidget(license_pill)
         layout.addWidget(ver_text)
-        layout.addWidget(comp_text)
         layout.addStretch()
         layout.addWidget(copyright_text)
 
